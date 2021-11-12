@@ -55,6 +55,8 @@ def init(
         trim_test_directive:bool = Option(False, help="Remove the #test-case directive from the source cell"), 
         force:bool = Option(False, help="Force an update to metadata."),
         lock_cells:bool = Option(False, help="Make the test-case cells read-only"),
+        ignore_existing:bool = Option(False, help="Ignore cells that allready have been tagged for testing"),
+
 
     ):
     """
@@ -74,9 +76,15 @@ def init(
     nb = get_notebook(notebookfile)
     for cell in nb.cells:
         if code_info := get_directive(cell):
-            if cell.metadata.get('test-case') and not force:
-                exit(INIT_ALLREADY_DONE)
             test_name, code = code_info
+
+            test_exists = bool(cell.metadata.get('test-case'))
+            if test_exists and ignore_existing:
+                typer.echo(f"test {test_name} not updated")
+                continue
+            elif test_exists and not force:
+                exit(INIT_ALLREADY_DONE)
+
             cell_result = list(getresult(cell))
 
             cell.metadata['test-case'] = dict(name=test_name, result=cell_result, crc=crc(cell))
