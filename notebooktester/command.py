@@ -78,20 +78,18 @@ def init(
         if code_info := get_directive(cell):
             test_name, code = code_info
 
-            test_exists = bool(cell.metadata.get('test-case'))
-            if test_exists and ignore_existing:
-                typer.echo(f"test {test_name} not updated")
-                continue
-            elif test_exists and not force:
-                exit(INIT_ALLREADY_DONE)
+            if current_test := cell.metadata.get('test-case'):
+                if ignore_existing:
+                    typer.echo(f"test {test_name} not updated")
+                    continue
+                elif not force:
+                    exit(INIT_ALLREADY_DONE)
 
             cell_result = list(getresult(cell))
 
             cell.metadata['test-case'] = dict(name=test_name, result=cell_result, crc=crc(cell))
             cell.metadata["editable"] = not lock_cells
             cell.metadata["deletable"] = not lock_cells
-
-
 
             if trim_test_directive:
                 cell.source = code
