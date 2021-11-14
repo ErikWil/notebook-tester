@@ -6,7 +6,9 @@ import zlib
 
 from typer.params import Argument, Option
 
-from notebooktester import ERRORS, __app_name__, __version__, NOTEBOOK_NOT_FOUND, NOTEBOOK_JSON_ERROR, IO_ERROR, INIT_ALLREADY_DONE, PROCESSING_FAILURE
+from notebooktester import (
+    ERRORS, __app_name__, __version__, NOTEBOOK_NOT_FOUND, NOTEBOOK_JSON_ERROR, 
+    IO_ERROR, INIT_ALLREADY_DONE, PROCESSING_FAILURE, SOURCE_CANGED)
 
 app = typer.Typer()
 
@@ -43,9 +45,9 @@ def get_directive(cell):
 def crc(cell):
     return zlib.crc32(cell.source.encode('utf-8'))
 
-def exit(code:int):
+def exit(code:int, *args):
     msg = ERRORS.get(code) or f"Exit with code={code}"
-    typer.echo(msg)
+    typer.echo(msg.format(args))
     raise typer.Exit(code)
 
 
@@ -54,7 +56,7 @@ def init(
         notebookfile: str = Argument(..., help="The notebook to be tested "),  
         trim_test_directive:bool = Option(False, help="Remove the #test-case directive from the source cell"), 
         force:bool = Option(False, help="Force an update to metadata."),
-        lock_cells:bool = Option(False, help="Make the test-case cells read-only"),
+        lock_cells:bool = Option(False, help="Make the test-case cells read-only. Works on some jupyter tools"),
         ignore_existing:bool = Option(False, help="Ignore cells that allready have been tagged for testing"),
 
 
@@ -106,7 +108,6 @@ def test(
         notebook_version:int=Option(4, help="The notebook version used"),
         timeout:int= Option(600, help="The calcuation timeout in seconds"),
         verbose:int=Option(0, help="Verbosity of the output 0..3"),
-        report_file:str=Option(None, help="A file where the output should be stored. Default is to the screen"),
         strict_consistency:bool = Option(False, help="Terminate execution if any cell has been tampered with"),
         ):
     """
@@ -115,6 +116,9 @@ def test(
 
     The notebook will not change. 
     """
+    def output(severity, txt):
+        if verbose >= severity:
+            typer.echo(txt)
 
 
     with open(notebookfile) as f:
@@ -122,23 +126,32 @@ def test(
         exec_proc = ExecutePreprocessor(timeout=timeout, allow_errors=True)
 
         run_meta = dict(metadata=dict(path='.'))
+        failed = succeded = 0
         try:
             result = exec_proc.preprocess(nb, run_meta)[0]
             for cell in result.cells:
+                output(3, f"Processing cell {cell.cell_type}")
                 if cell.cell_type == 'code':
                     metadata = cell.metadata.get('test-case')
                     if metadata:
                         if crc(cell) != metadata.crc:
-                            print('Warning: cell has been changed since INIT')
+                            if strict_consistency:
+                                exit(SOURCE_CANGED, metadata.name)
+                            else:
+                                output(0,f'Warning: test {metadata.name} has been changed since INIT')
                         actual = list(getresult(cell))
                         expected = metadata.result
-                        if actual != expected:
-                            print(f"{metadata.name} result mismatch {actual}, {expected}")
+                        if actual == expected:
+                            succeded += 1
                         else:
-                            print("report exeuction time here")
+                            output(0,f"{metadata.name} result mismatch {actual}, {expected}")
+                            failed += 1
+                        output(1,f'Used time ')
 
         except CellExecutionError:
             exit(PROCESSING_FAILURE)
+
+    output(0, f"\nDONE, succeded: {succeded}, failed: {failed}")
 
 
 def _ver_cb(value: bool) -> None:
