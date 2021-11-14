@@ -18,6 +18,6 @@ Preparing code for testing can be done in two simple steps
 ## Running tests
 
 Now - assuming you have made changes in your code base and want to test if the changes have any side effects you can run 
-the command `notebooktester test mynotebook.ipynb`
+the command `notebooktester test mynotebook.ipynb`. This will load the notebook and 
 
 
